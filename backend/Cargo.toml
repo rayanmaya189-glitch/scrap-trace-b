@@ -64,6 +64,15 @@ prometheus = "0.14"
 # Big Decimal for financial calculations
 bigdecimal = { version = "0.4", features = ["serde"] }
 
+# Random number generation
+rand = "0.8"
+
+# HTTP Client for SMS/OTP
+reqwest = { version = "0.12", features = ["json"] }
+
+# MinIO S3 Client
+aws-sdk-s3 = "1.75"
+
 [dev-dependencies]
 tokio-test = "0.4"
 mockall = "0.14"

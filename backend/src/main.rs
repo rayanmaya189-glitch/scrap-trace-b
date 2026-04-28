@@ -10,6 +10,8 @@ mod models;
 mod nats;
 mod routes;
 mod state;
+mod scoring;
+mod consumer;
 
 use axum::{
     routing::{get, post},
