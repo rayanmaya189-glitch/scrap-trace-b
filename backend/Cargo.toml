@@ -1,0 +1,84 @@
+[package]
+name = "btrace-backend"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rayan <rayan@btrace.io>"]
+description = "B-Trace: Industrial Traceability & Credit Protocol - Backend API"
+license = "MIT"
+
+[dependencies]
+# Web Framework
+axum = { version = "0.8", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace", "limit", "request-id"] }
+hyper = "1.6"
+
+# Async Runtime
+tokio = { version = "1.44", features = ["full"] }
+
+# NATS Client
+async-nats = "0.42"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "bigdecimal"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Cryptography
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+sha2 = "0.10"
+hex = "0.4"
+
+# Validation
+validator = { version = "0.20", features = ["derive"] }
+
+# JWT Authentication
+jsonwebtoken = "9.3"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# UUID
+uuid = { version = "1.16", features = ["v4", "serde"] }
+
+# Error Handling
+anyhow = "1.0"
+thiserror = "2.0"
+
+# Logging & Tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Configuration
+config = "0.15"
+dotenvy = "0.15"
+
+# Redis
+redis = { version = "0.29", features = ["tokio-comp", "connection-manager"] }
+
+# Metrics
+prometheus = "0.14"
+
+# Big Decimal for financial calculations
+bigdecimal = { version = "0.4", features = ["serde"] }
+
+# Random number generation
+rand = "0.8"
+
+# HTTP Client for SMS/OTP
+reqwest = { version = "0.12", features = ["json"] }
+
+# MinIO S3 Client
+aws-sdk-s3 = "1.75"
+
+[dev-dependencies]
+tokio-test = "0.4"
+mockall = "0.14"
+fake = { version = "3.1", features = ["derive"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+strip = true

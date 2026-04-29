@@ -1,0 +1,35 @@
+```
+# Rust/Cargo
+target/
+Cargo.lock
+**/*.rs.bk
+
+# Dependencies
+**/node_modules/
+**/.venv/
+**/venv/
+
+# Build artifacts
+**/dist/
+**/build/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+**/__pycache__/
+**/*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+```
