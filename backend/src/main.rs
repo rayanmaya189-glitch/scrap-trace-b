@@ -1,93 +1,71 @@
-//! B-Trace Backend - Industrial Traceability & Credit Protocol
-//! 
-//! This is the main entry point for the B-Trace Axum API server.
-//! It handles authentication, rate limiting, validation, and publishes events to NATS JetStream.
-
+mod api;
 mod config;
-mod crypto;
-mod error;
+mod db;
 mod models;
-mod nats;
-mod routes;
-mod state;
-mod scoring;
-mod consumer;
+mod repositories;
+mod services;
+mod utils;
 
 use axum::{
+    middleware,
     routing::{get, post},
     Router,
 };
+use std::net::SocketAddr;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
-    limit::RequestBodyLimitLayer,
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use std::time::Duration;
 
-use crate::config::Config;
-use crate::state::AppState;
+use crate::api::routes::{auth_routes, handshake_routes, material_routes, scoring_routes, supplier_routes};
+use crate::config::AppConfig;
+use crate::db::pool::{create_pool, run_migrations};
+use crate::repositories::{material_repository::MaterialRepository, scoring_repository::ScoringRepository, supplier_repository::SupplierRepository};
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Initialize logging
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "btrace_backend=debug,tower_http=debug".into()),
-        )
-        .with(tracing_subscriber::fmt::layer().with_target(false))
+        .with(tracing_subscriber::EnvFilter::new(
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+        ))
+        .with(tracing_subscriber::fmt::layer())
         .init();
 
-    tracing::info!("Starting B-Trace Backend v{}", env!("CARGO_PKG_VERSION"));
+    let config = AppConfig::from_env().expect("Failed to load configuration");
 
-    // Load configuration
-    let config = Config::load()?;
-    tracing::info!("Configuration loaded successfully");
+    let pool = create_pool(&config.database_url).await?;
+    run_migrations(&pool).await?;
 
-    // Initialize application state
-    let state = AppState::new(&config).await?;
-    tracing::info!("Application state initialized");
+    let supplier_repo = SupplierRepository::new(pool.clone());
+    let material_repo = MaterialRepository::new(pool.clone());
+    let scoring_repo = ScoringRepository::new(pool.clone());
 
-    // Configure CORS
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
-        .allow_headers(Any)
-        .expose_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-            axum::http::header::HeaderName::from_static("x-ratelimit-limit"),
-            axum::http::header::HeaderName::from_static("x-ratelimit-remaining"),
-        ])
-        .max_age(Duration::from_secs(86400));
+        .allow_headers(Any);
 
-    // Build router
     let app = Router::new()
-        // Health check
-        .route("/health", get(routes::health::handler))
-        // Auth endpoints
-        .route("/v1/auth/request", post(routes::auth::request_otp))
-        .route("/v1/auth/verify", post(routes::auth::verify_otp))
-        // Material endpoints
-        .route("/v1/material", post(routes::material::create_material))
-        // Handshake endpoints
-        .route("/v1/handshake/confirm", post(routes::handshake::confirm_handshake))
-        // Score endpoints
-        .route("/v1/score/:supplier_id", get(routes::score::get_score))
-        // Export endpoints
-        .route("/v1/export/:plugin/:id.:format", get(routes::export::generate_export))
+        .nest("/v1/auth", auth_routes::router())
+        .nest("/v1/suppliers", supplier_routes::router().with_state(supplier_repo.clone()))
+        .nest("/v1/materials", material_routes::router().with_state((material_repo.clone(), supplier_repo.clone())))
+        .nest("/v1/scores", scoring_routes::router().with_state((scoring_repo.clone(), supplier_repo.clone())))
+        .nest("/v1/handshakes", handshake_routes::router())
+        .route("/health", get(health_check))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .layer(RequestBodyLimitLayer::new(2 * 1024 * 1024)) // 2MB limit
-        .with_state(state);
+        .with_state(()); 
 
-    // Start server
-    let addr = config.server_addr;
-    tracing::info!("Server listening on {}", addr);
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    tracing::info!("🚀 B-Trace API server starting on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+async fn health_check() -> &'static str {
+    "OK"
 }
