@@ -1,20 +1,51 @@
 ```
 # Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
 target/
 
-# Logs and temp files
-*.log
-*.tmp
+# TypeScript
+*.tsbuildinfo
+.next/
+.nuxt/
 
-# Environment
+# Logs
+*.log
+
+# Environment variables
 .env
 .env.local
 *.env.*
 
-# Editors
+# IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Rust-specific
-Cargo.lock
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.mypy_cache/
+
+# Temporary files
+*.tmp
+*~
 ```
