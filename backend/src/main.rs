@@ -1,7 +1,9 @@
 mod api;
 mod config;
+mod consumers;
 mod db;
 mod models;
+mod nats;
 mod repositories;
 mod services;
 mod utils;
@@ -11,7 +13,10 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use sqlx::postgres::PgPoolOptions;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use std::time::Duration;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
@@ -20,26 +25,57 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::api::routes::{auth_routes, handshake_routes, material_routes, scoring_routes, supplier_routes};
 use crate::config::AppConfig;
+use crate::consumers::EventConsumer;
 use crate::db::pool::{create_pool, run_migrations};
+use crate::nats::NatsManager;
 use crate::repositories::{material_repository::MaterialRepository, scoring_repository::ScoringRepository, supplier_repository::SupplierRepository};
+
+#[derive(Clone)]
+pub struct AppState {
+    pub material_repo: MaterialRepository,
+    pub scoring_repo: ScoringRepository,
+    pub supplier_repo: SupplierRepository,
+    pub nats_manager: Arc<NatsManager>,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
+            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,btrace=debug".into()),
         ))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
     let config = AppConfig::from_env().expect("Failed to load configuration");
 
-    let pool = create_pool(&config.database_url).await?;
+    // Initialize database pool
+    let pool = PgPoolOptions::new()
+        .max_connections(config.db_max_connections)
+        .acquire_timeout(Duration::from_secs(10))
+        .connect(&config.database_url)
+        .await?;
+    
     run_migrations(&pool).await?;
+    tracing::info!("✅ Database migrations completed");
 
+    // Initialize NATS JetStream
+    let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://localhost:4222".to_string());
+    let nats_manager = Arc::new(NatsManager::new(&nats_url).await?);
+    nats_manager.init_streams().await?;
+    tracing::info!("✅ NATS JetStream initialized");
+
+    // Initialize repositories
     let supplier_repo = SupplierRepository::new(pool.clone());
     let material_repo = MaterialRepository::new(pool.clone());
     let scoring_repo = ScoringRepository::new(pool.clone());
+
+    let app_state = AppState {
+        material_repo: material_repo.clone(),
+        scoring_repo: scoring_repo.clone(),
+        supplier_repo: supplier_repo.clone(),
+        nats_manager: nats_manager.clone(),
+    };
 
     let cors = CorsLayer::new()
         .allow_origin(Any)
@@ -51,11 +87,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/v1/suppliers", supplier_routes::router().with_state(supplier_repo.clone()))
         .nest("/v1/materials", material_routes::router().with_state((material_repo.clone(), supplier_repo.clone())))
         .nest("/v1/scores", scoring_routes::router().with_state((scoring_repo.clone(), supplier_repo.clone())))
-        .nest("/v1/handshakes", handshake_routes::router())
+        .nest("/v1/handshakes", handshake_routes::router().with_state(app_state.clone()))
         .route("/health", get(health_check))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
-        .with_state(()); 
+        .with_state(app_state.clone());
+
+    // Start event consumer in background
+    let consumer = EventConsumer::new(nats_manager.clone(), pool.clone());
+    tokio::spawn(async move {
+        if let Err(e) = consumer.start().await {
+            tracing::error!("❌ Event consumer failed: {}", e);
+        }
+    });
+    tracing::info!("✅ Event consumer started");
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
     tracing::info!("🚀 B-Trace API server starting on {}", addr);
