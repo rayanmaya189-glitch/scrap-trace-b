@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod config;
 mod consumers;
 mod db;
@@ -23,12 +24,15 @@ use tower_http::{
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use crate::api::handlers::auth_handler::AuthState as AuthHandlerState;
 use crate::api::routes::{auth_routes, handshake_routes, material_routes, scoring_routes, supplier_routes};
+use crate::auth::JwtManager;
 use crate::config::AppConfig;
 use crate::consumers::EventConsumer;
 use crate::db::pool::{create_pool, run_migrations};
 use crate::nats::NatsManager;
 use crate::repositories::{material_repository::MaterialRepository, scoring_repository::ScoringRepository, supplier_repository::SupplierRepository};
+use crate::services::RedisManager;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -65,6 +69,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     nats_manager.init_streams().await?;
     tracing::info!("✅ NATS JetStream initialized");
 
+    // Initialize Redis
+    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_manager = RedisManager::new(&redis_url)?;
+    tracing::info!("✅ Redis connection initialized");
+
+    // Initialize JWT Manager
+    let jwt_manager = JwtManager::new()?;
+    tracing::info!("✅ JWT manager initialized");
+
     // Initialize repositories
     let supplier_repo = SupplierRepository::new(pool.clone());
     let material_repo = MaterialRepository::new(pool.clone());
@@ -77,13 +90,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         nats_manager: nats_manager.clone(),
     };
 
+    // Auth state for auth routes
+    let auth_state = AuthHandlerState {
+        redis_manager: redis_manager.clone(),
+        jwt_manager: jwt_manager.clone(),
+    };
+
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
 
     let app = Router::new()
-        .nest("/v1/auth", auth_routes::router())
+        .nest("/v1/auth", auth_routes::router(auth_state))
         .nest("/v1/suppliers", supplier_routes::router().with_state(supplier_repo.clone()))
         .nest("/v1/materials", material_routes::router().with_state((material_repo.clone(), supplier_repo.clone())))
         .nest("/v1/scores", scoring_routes::router().with_state((scoring_repo.clone(), supplier_repo.clone())))
