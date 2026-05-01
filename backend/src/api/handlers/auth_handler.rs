@@ -9,6 +9,8 @@ use validator::Validate;
 
 use crate::models::ApiResponse;
 use crate::utils::error::{AppError, AppResult};
+use crate::services::RedisManager;
+use crate::auth::JwtManager;
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct RequestOtpRequest {
@@ -40,17 +42,40 @@ pub struct AuthResponse {
     pub tokens: AuthTokens,
 }
 
+#[derive(Clone)]
+pub struct AuthState {
+    pub redis_manager: RedisManager,
+    pub jwt_manager: JwtManager,
+}
+
 pub async fn request_otp(
+    State(state): State<AuthState>,
     Json(payload): Json<RequestOtpRequest>,
 ) -> AppResult<impl IntoResponse> {
     payload.validate().map_err(|e| {
         AppError::BadRequest(format!("Validation failed: {}", e))
     })?;
 
+    // Rate limiting check
+    let rate_limit_key = format!("otp_request:{}", payload.phone);
+    let allowed = state.redis_manager
+        .increment_rate_limit(&rate_limit_key, 5, 3600) // 5 requests per hour
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Rate limit check failed: {}", e)))?;
+    
+    if !allowed {
+        return Err(AppError::TooManyRequests("Too many OTP requests. Please try again later.".to_string()));
+    }
+
     let otp = generate_otp();
     
-    store_otp_temporarily(&payload.phone, &otp).await;
+    // Store OTP in Redis with 5 minute TTL
+    state.redis_manager
+        .store_otp(&payload.phone, &otp)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to store OTP: {}", e)))?;
 
+    // Send SMS (in production, integrate with Exotel/Twilio)
     send_sms_otp(&payload.phone, &otp).await.ok();
 
     Ok(Json(ApiResponse::success(
@@ -64,22 +89,42 @@ pub async fn request_otp(
 }
 
 pub async fn verify_otp(
+    State(state): State<AuthState>,
     Json(payload): Json<VerifyOtpRequest>,
 ) -> AppResult<impl IntoResponse> {
     payload.validate().map_err(|e| {
         AppError::BadRequest(format!("Validation failed: {}", e))
     })?;
 
-    let stored_otp = get_stored_otp(&payload.phone).await
+    // Get OTP from Redis
+    let stored_otp = state.redis_manager
+        .get_otp(&payload.phone)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to retrieve OTP: {}", e)))?
         .ok_or_else(|| AppError::BadRequest("OTP not found or expired".to_string()))?;
 
     if stored_otp != payload.otp {
         return Err(AppError::Unauthorized("Invalid OTP".to_string()));
     }
 
-    clear_stored_tp(&payload.phone).await;
+    // Delete OTP after successful verification
+    state.redis_manager
+        .delete_otp(&payload.phone)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to delete OTP: {}", e)))?;
 
-    let (access_token, refresh_token) = generate_jwt_tokens(&payload.phone).await;
+    // Generate JWT tokens
+    let access_token = state.jwt_manager
+        .generate_access_token(
+            payload.phone.clone(),
+            None,
+            vec![],
+        )
+        .map_err(|e| AppError::InternalServerError(format!("Failed to generate access token: {}", e)))?;
+
+    let refresh_token = state.jwt_manager
+        .generate_refresh_token(&payload.phone)
+        .map_err(|e| AppError::InternalServerError(format!("Failed to generate refresh token: {}", e)))?;
 
     let response = AuthResponse {
         user_id: uuid::Uuid::new_v4().to_string(),
@@ -105,42 +150,40 @@ fn generate_otp() -> String {
     format!("{:06}", rng.gen_range(100000..999999))
 }
 
-async fn store_otp_temporarily(phone: &str, otp: &str) {
-    tracing::info!("Storing OTP for phone: {} (in production, use Redis)", phone);
-}
-
-async fn get_stored_otp(phone: &str) -> Option<String> {
-    tracing::info!("Retrieving OTP for phone: {} (in production, use Redis)", phone);
-    None
-}
-
-async fn clear_stored_otp(phone: &str) {
-    tracing::info!("Clearing OTP for phone: {} (in production, use Redis)", phone);
-}
-
 async fn send_sms_otp(phone: &str, otp: &str) -> Result<(), AppError> {
-    tracing::info!("Sending SMS OTP to {}: {} (in production, use Exotel/Twilio)", phone, otp);
+    // TODO: Integrate with Exotel/Twilio
+    // For now, log the OTP for development
+    tracing::info!("SMS OTP to {}: {} (DEV MODE - Integrate Exotel/Twilio)", phone, otp);
     Ok(())
 }
 
-async fn generate_jwt_tokens(phone: &str) -> (String, String) {
-    let access_token = format!("mock_access_token_for_{}", phone);
-    let refresh_token = format!("mock_refresh_token_for_{}", phone);
-    (access_token, refresh_token)
-}
-
 pub async fn refresh_token(
+    State(state): State<AuthState>,
     Json(payload): Json<serde_json::Value>,
 ) -> AppResult<impl IntoResponse> {
     let refresh_token = payload.get("refresh_token")
         .and_then(|v| v.as_str())
         .ok_or_else(|| AppError::BadRequest("Refresh token required".to_string()))?;
 
-    let new_access_token = format!("new_access_token_for_{}", refresh_token);
+    // Check if token is blacklisted
+    let is_blacklisted = state.redis_manager
+        .is_token_blacklisted(refresh_token)
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Token blacklist check failed: {}", e)))?;
+    
+    if is_blacklisted {
+        return Err(AppError::Unauthorized("Token has been revoked".to_string()));
+    }
+
+    // Refresh tokens
+    let (new_access_token, new_refresh_token) = state.jwt_manager
+        .refresh_access_token(refresh_token)
+        .map_err(|e| AppError::Unauthorized(format!("Invalid refresh token: {}", e)))?;
 
     Ok(Json(ApiResponse::success(
         serde_json::json!({
             "access_token": new_access_token,
+            "refresh_token": new_refresh_token,
             "expires_in": 86400,
             "token_type": "Bearer"
         }),
@@ -148,7 +191,20 @@ pub async fn refresh_token(
     )))
 }
 
-pub async fn logout() -> AppResult<impl IntoResponse> {
+pub async fn logout(
+    State(state): State<AuthState>,
+    Json(payload): Json<serde_json::Value>,
+) -> AppResult<impl IntoResponse> {
+    let token = payload.get("token")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| AppError::BadRequest("Token required".to_string()))?;
+
+    // Blacklist the token
+    state.redis_manager
+        .blacklist_token(token, 86400) // 24 hours
+        .await
+        .map_err(|e| AppError::InternalServerError(format!("Failed to blacklist token: {}", e)))?;
+
     Ok(Json(ApiResponse::success(
         serde_json::json!({
             "logged_out": true
