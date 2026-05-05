@@ -1,36 +1,50 @@
 ```
 # Build artifacts
-build/
 *.apk
 *.aab
+build/
+.externalNativeBuild/
+.gradle/
+local.properties
+
+# Android specific
+*.dex
 *.so
-*.aar
+*/.cxx/
+*/.externalNativeBuild/
+
+# iOS specific
+*.ipa
+*.app/
+DerivedData/
+*.xcworkspace/
+*.xcodeproj/
 
 # Dependencies
-.gradle/
 node_modules/
-vendor/
+Pods/
 
-# IDE files
-.idea/
-.vscode/
-*.iml
-*.ipr
-*.iws
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Logs
+# Logs and temp files
 *.log
+*.tmp
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Python (if applicable)
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -39,14 +53,34 @@ __pycache__/
 env/
 venv/
 .venv/
-
-# Coverage reports
-coverage/
-htmlcov/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
 .coverage
+.cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.DS_Store
+Thumbs.db
 
-# Temporary files
-*.tmp
-*.temp
-*.bak
+# Java
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.so
+
+# Kotlin
+*.kotlin_metadata
+
+# Swift
+*.swiftmodule
+*.swiftdoc
+*.swiftsourceinfo
+
+# Mobile specific
+.mobile_metadata/
 ```
