@@ -13,6 +13,8 @@ use crate::repositories::material_repository::MaterialRepository;
 use crate::repositories::supplier_repository::SupplierRepository;
 use crate::utils::error::{AppError, AppResult};
 use crate::utils::crypto::{verify_signature, compute_payload_hash};
+use crate::nats::{BTraceEvent, HandshakeDisputedEvent};
+use crate::AppState;
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct ConfirmHandshakeRequest {
@@ -28,6 +30,14 @@ pub struct ConfirmHandshakeRequest {
     pub to_party: String,
     pub timestamp: String,
     pub data: String,
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct RaiseDisputeRequest {
+    pub handshake_id: Uuid,
+    pub reason: String,
+    #[serde(default)]
+    pub evidence_urls: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -279,4 +289,73 @@ pub async fn list_material_handshakes(
         }),
         summary,
     )))
+}
+
+/// Raise a dispute on a confirmed handshake
+pub async fn raise_dispute(
+    State(app_state): State<AppState>,
+    axum::extract::Extension(user_id): axum::extract::Extension<Uuid>,
+    Json(payload): Json<RaiseDisputeRequest>,
+) -> AppResult<impl IntoResponse> {
+    payload.validate().map_err(|e| {
+        AppError::BadRequest(format!("Validation failed: {}", e))
+    })?;
+
+    // Verify the handshake exists and get material_id
+    let handshake_data: Option<(Uuid, String)> = sqlx::query_as!(
+        "(Uuid, String)",
+        "SELECT material_id, sync_status FROM digital_handshake WHERE id = $1",
+        payload.handshake_id
+    )
+    .fetch_optional(&app_state.material_repo.pool)
+    .await
+    .map_err(|e| AppError::DatabaseError(e))?;
+
+    let (material_id, sync_status) = handshake_data.ok_or_else(|| {
+        AppError::NotFound("Handshake not found".to_string())
+    })?;
+
+    // Only allow disputes on confirmed handshakes
+    if sync_status != "CONFIRMED" && sync_status != "SYNCED" {
+        return Err(AppError::BadRequest(
+            "Can only dispute confirmed handshakes".to_string()
+        ));
+    }
+
+    // Create the dispute event
+    let dispute_event = HandshakeDisputedEvent {
+        handshake_id: payload.handshake_id,
+        material_id,
+        disputed_by: user_id,
+        reason: payload.reason.clone(),
+        evidence: Some(serde_json::to_value(&payload.evidence_urls).unwrap_or_default()),
+        timestamp: chrono::Utc::now(),
+    };
+
+    // Publish to NATS JetStream
+    app_state.nats_manager
+        .publish(BTraceEvent::HandshakeDisputed(dispute_event))
+        .await
+        .map_err(|e| AppError::InternalServerError(
+            format!("Failed to publish dispute event: {}", e)
+        ))?;
+
+    tracing::info!(
+        "Dispute raised for handshake {} by user {}",
+        payload.handshake_id,
+        user_id
+    );
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(ApiResponse::success(
+            serde_json::json!({
+                "handshake_id": payload.handshake_id,
+                "material_id": material_id,
+                "status": "DISPUTED_PENDING_REVIEW",
+                "reason": payload.reason
+            }),
+            "Dispute submitted successfully. The handshake has been flagged for manual review.".to_string(),
+        )),
+    ))
 }

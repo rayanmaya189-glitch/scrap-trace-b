@@ -8,7 +8,7 @@ import { Toast } from '../../components/ui/Toast';
 import { Dialog } from '../../components/ui/Dialog';
 import { Camera } from '../../components/ui/Camera';
 import { FileUpload } from '../../components/ui/FileUpload';
-import api from '../../lib/api';
+import { handshakeApi } from '../../api/handshake';
 
 interface HandshakeRecord {
   id: string;
@@ -22,7 +22,7 @@ interface HandshakeRecord {
   timestamp_utc: string;
 }
 
-export function HandshakeConfirm() {
+export function HandshakeDispute() {
   const { user, token } = useAuthStore();
   const [handshakeId, setHandshakeId] = useState('');
   const [loading, setLoading] = useState(false);
