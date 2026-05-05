@@ -6,9 +6,9 @@ export function ComplianceRoutes() {
   return (
     <Routes>
       <Route index element={<ComplianceDashboard />} />
-      <Route path="reports" element={<div className="p-4">Report Generator (Coming Soon)</div>} />
-      <Route path="consent" element={<div className="p-4">Consent Manager (Coming Soon)</div>} />
-      <Route path="audit" element={<div className="p-4">Audit Trail Viewer (Coming Soon)</div>} />
+      <Route path="reports" element={<ComplianceDashboard defaultTab="reports" />} />
+      <Route path="consent" element={<ComplianceDashboard defaultTab="consent" />} />
+      <Route path="audit" element={<ComplianceDashboard defaultTab="audit" />} />
     </Routes>
   );
 }
