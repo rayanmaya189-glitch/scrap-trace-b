@@ -1,86 +1,71 @@
 ```
-# Build artifacts
+# Android build artifacts
 *.apk
-*.aab
-build/
-.externalNativeBuild/
-.gradle/
-local.properties
-
-# Android specific
-*.dex
+*.aar
 *.so
-*/.cxx/
-*/.externalNativeBuild/
+*.dex
+*.class
 
-# iOS specific
+# Android dependency directories
+.gradle/
+build/
+app/build/
+
+# iOS build artifacts
 *.ipa
-*.app/
-DerivedData/
-*.xcworkspace/
-*.xcodeproj/
+*.app
+*.framework
+*.dylib
 
-# Dependencies
-node_modules/
+# iOS dependency directories
 Pods/
+Carthage/
+build/
 
-# Logs and temp files
-*.log
-*.tmp
-
-# Environment
-.env
-.env.local
-*.env.*
-
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-pip-log.txt
-pip-delete-this-directory.txt
-.tox/
-.coverage
-.cache/
-nosetests.xml
-coverage.xml
-*.cover
-*.log
-.DS_Store
-Thumbs.db
-
-# Java
+# Kotlin/Java compiled files
 *.class
 *.jar
 *.war
 *.ear
-*.nar
-*.so
 
-# Kotlin
-*.kotlin_metadata
-
-# Swift
+# Swift compiled files
 *.swiftmodule
 *.swiftdoc
-*.swiftsourceinfo
 
-# Mobile specific
-.mobile_metadata/
+# Build directories (general)
+target/
+dist/
+out/
+
+# IDE files
+.idea/
+.vscode/
+
+# Log files
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Coverage reports
+coverage/
+htmlcov/
+*.coverage
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Python artifacts (if any Python components)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 ```
