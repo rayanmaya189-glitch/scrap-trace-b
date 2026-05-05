@@ -12,7 +12,8 @@ import {
   Menu, 
   X,
   WifiOff,
-  Cloud
+  Cloud,
+  User
 } from 'lucide-react';
 import { useSyncStore } from '@/stores/useSyncStore';
 
@@ -22,6 +23,7 @@ const navigation = [
   { name: 'Handshakes', href: '/handshakes', icon: Handshake },
   { name: 'Scores', href: '/scores', icon: BarChart3 },
   { name: 'Compliance', href: '/compliance', icon: FileText },
+  { name: 'Profile', href: '/profile', icon: User },
 ];
 
 export function DashboardLayout() {

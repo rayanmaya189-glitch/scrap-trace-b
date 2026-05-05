@@ -10,6 +10,7 @@ import { MaterialRoutes } from './features/materials/MaterialRoutes';
 import { HandshakeRoutes } from './features/handshakes/HandshakeRoutes';
 import { ScoreRoutes } from './features/scores/ScoreRoutes';
 import { ComplianceRoutes } from './features/compliance/ComplianceRoutes';
+import { ProfileRoutes } from './features/profile/ProfileRoutes';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +44,7 @@ function App() {
               <Route path="handshakes/*" element={<HandshakeRoutes />} />
               <Route path="scores/*" element={<ScoreRoutes />} />
               <Route path="compliance/*" element={<ComplianceRoutes />} />
+              <Route path="profile/*" element={<ProfileRoutes />} />
             </Route>
 
             {/* Catch all - redirect to dashboard */}
