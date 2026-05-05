@@ -1,47 +1,52 @@
 ```
-# Android build artifacts
-*.apk
-*.aar
-*.dex
-*.so
-
-# Android cache
-.gradle/
-local.properties
-.proguard/
-
-# Android build outputs
-app/build/
+# Build artifacts
 build/
+*.apk
+*.aab
+*.so
+*.aar
 
-# Kotlin compiled files
-*.kotlin_metadata
-*.class
+# Dependencies
+.gradle/
+node_modules/
+vendor/
 
 # IDE files
 .idea/
-*.iml
-*.iws
 .vscode/
+*.iml
+*.ipr
+*.iws
+
+# System files
+.DS_Store
+Thumbs.db
 
 # Logs
 *.log
 
-# Temp files
-*.tmp
-*~
-
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
+
+# Python (if applicable)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
 
 # Coverage reports
 coverage/
-*.gcov
-*.lcov
+htmlcov/
+.coverage
 
-# OS generated files
-.DS_Store
-Thumbs.db
+# Temporary files
+*.tmp
+*.temp
+*.bak
 ```
