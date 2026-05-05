@@ -46,11 +46,19 @@ The B-Trace Protocol has achieved FULL implementation with all critical security
   - Device fingerprinting for IT Act 65B compliance ✅
   - Hash chain validation ✅
 
-- **File Upload Handler** (`backend/src/api/handlers/upload_handler.rs`) ✅ NEW
+- **File Upload Handler** (`backend/src/api/handlers/upload_handler.rs`) ✅ COMPLETE
   - Multipart form data handling ✅
   - Evidence file upload for disputes ✅
-  - MinIO integration ready (presigned URL placeholder) ✅
+  - Full MinIO integration with presigned URLs ✅
   - File metadata tracking ✅
+  - Secure storage with 7-day presigned access ✅
+
+- **MinIO Service** (`backend/src/services/minio_service.rs`) ✅ NEW
+  - S3-compatible client for MinIO ✅
+  - File upload/download operations ✅
+  - Presigned URL generation (GET/PUT) ✅
+  - File deletion and metadata retrieval ✅
+  - Path-style addressing for MinIO ✅
 
 #### 4. API Endpoints (COMPLETE)
 | Endpoint | Method | Status | Notes |

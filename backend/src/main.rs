@@ -32,7 +32,7 @@ use crate::consumers::EventConsumer;
 use crate::db::pool::{create_pool, run_migrations};
 use crate::nats::NatsManager;
 use crate::repositories::{material_repository::MaterialRepository, scoring_repository::ScoringRepository, supplier_repository::SupplierRepository};
-use crate::services::RedisManager;
+use crate::services::{RedisManager, MinioManager};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -40,6 +40,8 @@ pub struct AppState {
     pub scoring_repo: ScoringRepository,
     pub supplier_repo: SupplierRepository,
     pub nats_manager: Arc<NatsManager>,
+    pub redis_manager: Arc<RedisManager>,
+    pub minio_manager: Arc<MinioManager>,
 }
 
 #[tokio::main]
@@ -78,6 +80,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let jwt_manager = JwtManager::new()?;
     tracing::info!("✅ JWT manager initialized");
 
+    // Initialize MinIO
+    let minio_manager = Arc::new(MinioManager::new(
+        &config.minio_endpoint,
+        &config.minio_access_key,
+        &config.minio_secret_key,
+        &config.minio_bucket,
+    )?);
+    tracing::info!("✅ MinIO storage initialized");
+
     // Initialize repositories
     let supplier_repo = SupplierRepository::new(pool.clone());
     let material_repo = MaterialRepository::new(pool.clone());
@@ -88,6 +99,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         scoring_repo: scoring_repo.clone(),
         supplier_repo: supplier_repo.clone(),
         nats_manager: nats_manager.clone(),
+        redis_manager: redis_manager.clone(),
+        minio_manager: minio_manager.clone(),
     };
 
     // Auth state for auth routes
@@ -109,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/v1/handshakes", handshake_routes::router().with_state(app_state.clone()))
         .nest("/v1/consent", consent_routes::router(pool.clone(), supplier_repo.clone()))
         .nest("/v1/reports", report_routes::router(pool.clone()))
-        .nest("/v1/upload", upload_routes::router())
+        .nest("/v1/upload", upload_routes::router().with_state(minio_manager.clone()))
         .route("/health", get(health_check))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

@@ -41,6 +41,7 @@ export function HandshakeDispute() {
 
   const handleFileUpload = async (files: File[]) => {
     const uploadedUrls: string[] = [];
+    setLoading(true);
     
     for (const file of files) {
       try {
@@ -54,13 +55,27 @@ export function HandshakeDispute() {
           headers: {
             'Content-Type': 'multipart/form-data',
           },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / (progressEvent.total || file.size)
+            );
+            console.log(`Upload progress: ${percentCompleted}%`);
+          },
         });
         
-        if (response.data.success && response.data.data?.url) {
+        if (response.data.success && response.data.data?.files) {
+          // Extract URLs from the response
+          const fileUrls = response.data.data.files.map((f: any) => f.url);
+          uploadedUrls.push(...fileUrls);
+        } else if (response.data.success && response.data.data?.url) {
           uploadedUrls.push(response.data.data.url);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to upload file:', error);
+        setToast({ 
+          message: `Failed to upload ${file.name}: ${error.response?.data?.message || error.message}`, 
+          type: 'error' 
+        });
         // Fallback: store as base64 if upload fails
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -75,8 +90,10 @@ export function HandshakeDispute() {
     // Add uploaded URLs to evidence
     if (uploadedUrls.length > 0) {
       setEvidence(prev => [...prev, ...uploadedUrls]);
+      setToast({ message: `${uploadedUrls.length} file(s) uploaded successfully`, type: 'success' });
     }
     
+    setLoading(false);
     setShowUpload(false);
   };
 
