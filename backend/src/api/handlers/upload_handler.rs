@@ -4,12 +4,18 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use std::sync::Arc;
 use uuid::Uuid;
+use crate::services::MinioManager;
 use crate::models::ApiResponse;
 use crate::utils::error::{AppError, AppResult};
 
+/// Application state for upload routes
+pub type UploadState = Arc<MinioManager>;
+
 /// Upload evidence file for dispute
 pub async fn upload_evidence(
+    State(minio_manager): State<UploadState>,
     mut multipart: Multipart,
 ) -> AppResult<impl IntoResponse> {
     let mut uploaded_files = Vec::new();
@@ -23,28 +29,35 @@ pub async fn upload_evidence(
             let filename = field.file_name().map(|s| s.to_string())
                 .unwrap_or_else(|| format!("evidence_{}.dat", Uuid::new_v4()));
             
+            let content_type = field.content_type().map(|s| s.to_string()).unwrap_or_else(|| "application/octet-stream".to_string());
+            
             let data = field.bytes().await.map_err(|e| {
                 AppError::InternalServerError(format!("Failed to read file data: {}", e))
             })?;
             
-            // In production, upload to MinIO here
-            // For now, we'll generate a presigned URL placeholder
+            // Generate unique object key for MinIO
             let file_id = Uuid::new_v4();
-            let file_url = format!("/evidence/{}", file_id);
+            let date_prefix = chrono::Utc::now().format("%Y/%m/%d");
+            let object_key = format!("disputes/{}/{}", date_prefix, file_id);
             
-            // TODO: Implement MinIO upload
-            // let minio_client = state.minio_client;
-            // let bucket = "btrace-evidence";
-            // let object_name = format!("disputes/{}/{}", chrono::Utc::now().format("%Y/%m/%d"), file_id);
-            // minio_client.put_object(bucket, &object_name, &data).await?;
-            // let presigned_url = minio_client.presigned_get_url(bucket, &object_name, 3600).await?;
+            // Upload to MinIO
+            let uploaded_key = minio_manager
+                .upload_file(&object_key, data.to_vec(), &content_type)
+                .await?;
+            
+            // Generate presigned URL for access (valid for 7 days)
+            let presigned_url = minio_manager
+                .generate_presigned_url(&uploaded_key, 604800) // 7 days in seconds
+                .await?;
             
             uploaded_files.push(serde_json::json!({
                 "id": file_id,
                 "filename": filename,
-                "url": file_url,
+                "url": presigned_url,
+                "object_key": uploaded_key,
                 "size": data.len(),
-                "content_type": field.content_type().map(|s| s.to_string()).unwrap_or_default()
+                "content_type": content_type,
+                "uploaded_at": chrono::Utc::now().to_rfc3339()
             }));
         }
     }
@@ -60,7 +73,7 @@ pub async fn upload_evidence(
                 "files": uploaded_files,
                 "count": uploaded_files.len()
             }),
-            "Files uploaded successfully".to_string(),
+            "Files uploaded successfully to secure storage".to_string(),
         )),
     ))
 }
