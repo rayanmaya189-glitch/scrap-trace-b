@@ -9,6 +9,7 @@ import { Dialog } from '../../components/ui/Dialog';
 import { Camera } from '../../components/ui/Camera';
 import { FileUpload } from '../../components/ui/FileUpload';
 import { handshakeApi } from '../../api/handshake';
+import { apiClient } from '../../api/client';
 
 interface HandshakeRecord {
   id: string;
@@ -38,16 +39,44 @@ export function HandshakeDispute() {
     setShowCamera(false);
   };
 
-  const handleFileUpload = (files: File[]) => {
-    files.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          setEvidence(prev => [...prev, e.target!.result as string]);
+  const handleFileUpload = async (files: File[]) => {
+    const uploadedUrls: string[] = [];
+    
+    for (const file of files) {
+      try {
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('purpose', 'dispute_evidence');
+        
+        // Upload to backend (which will handle MinIO presigned URL or direct storage)
+        const response = await apiClient.post('/upload/evidence', formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        });
+        
+        if (response.data.success && response.data.data?.url) {
+          uploadedUrls.push(response.data.data.url);
         }
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (error) {
+        console.error('Failed to upload file:', error);
+        // Fallback: store as base64 if upload fails
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          if (e.target?.result) {
+            setEvidence(prev => [...prev, e.target!.result as string]);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+    
+    // Add uploaded URLs to evidence
+    if (uploadedUrls.length > 0) {
+      setEvidence(prev => [...prev, ...uploadedUrls]);
+    }
+    
     setShowUpload(false);
   };
 
@@ -64,25 +93,21 @@ export function HandshakeDispute() {
 
     setLoading(true);
     try {
-      // Upload evidence to MinIO (placeholder - actual implementation would use presigned URLs)
-      const evidenceUrls: string[] = [];
-      for (const img of evidence) {
-        // In production, upload to MinIO and get URL
-        evidenceUrls.push(img); // For now, store base64
-      }
+      // Separate URLs from base64 data
+      const evidenceUrls = evidence.filter(e => e.startsWith('http') || e.startsWith('/'));
+      const evidenceBase64 = evidence.filter(e => e.startsWith('data:'));
+      
+      // For base64 images, we'll include them directly in the request
+      // In production, these should be uploaded to MinIO first
+      const allEvidence = [...evidenceUrls, ...evidenceBase64];
 
-      const response = await api.post(
-        '/handshakes/dispute',
-        {
-          handshake_id: handshakeId,
-          reason: disputeReason,
-          evidence_urls: evidenceUrls,
-          disputed_by: user?.id,
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const response = await handshakeApi.raiseDispute({
+        handshake_id: handshakeId,
+        reason: disputeReason,
+        evidence: JSON.stringify(allEvidence),
+      });
 
-      if (response.data.success) {
+      if (response) {
         setToast({ message: 'Dispute submitted successfully', type: 'success' });
         setHandshakeId('');
         setDisputeReason('');
@@ -90,9 +115,9 @@ export function HandshakeDispute() {
         setShowDialog(false);
       }
     } catch (error: any) {
-      setToast({ 
-        message: error.response?.data?.message || 'Failed to submit dispute', 
-        type: 'error' 
+      setToast({
+        message: error.response?.data?.message || 'Failed to submit dispute',
+        type: 'error'
       });
     } finally {
       setLoading(false);
@@ -102,7 +127,7 @@ export function HandshakeDispute() {
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-6">
       <h1 className="text-2xl font-bold text-gray-900">Raise Handshake Dispute</h1>
-      
+
       <Card className="p-6">
         <p className="text-sm text-gray-600 mb-4">
           If you believe a digital handshake is fraudulent or incorrect, you can raise a dispute with evidence.

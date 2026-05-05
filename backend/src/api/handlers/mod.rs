@@ -5,3 +5,4 @@ pub mod material_handler;
 pub mod report_handler;
 pub mod scoring_handler;
 pub mod supplier_handler;
+pub mod upload_handler;
