@@ -1,15 +1,81 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, Handshake, TrendingUp, Shield, Plus, ArrowRight } from 'lucide-react';
+import { materialApi } from '../../api/material';
+import { handshakeApi } from '../../api/handshake';
+import apiClient from '../../lib/api';
+
+interface DashboardStats {
+  totalMaterials: number;
+  activeHandshakes: number;
+  icsScore: string;
+  complianceStatus: string;
+}
 
 export function DashboardPage() {
-  // Mock data - will be replaced with real API calls
-  const stats = [
-    { name: 'Total Materials', value: '0', icon: Package, change: '+0%', href: '/materials' },
-    { name: 'Active Handshakes', value: '0', icon: Handshake, change: '+0%', href: '/handshakes' },
-    { name: 'ICS Score', value: '--', icon: TrendingUp, change: 'N/A', href: '/scores' },
-    { name: 'Compliance Status', value: 'Good', icon: Shield, change: 'On track', href: '/compliance' },
+  const [stats, setStats] = useState<DashboardStats>({
+    totalMaterials: 0,
+    activeHandshakes: 0,
+    icsScore: '--',
+    complianceStatus: 'Loading...',
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    try {
+      const [materialSummary, handshakeList] = await Promise.all([
+        materialApi.getMaterialSummary().catch(() => ({ total_materials: 0 })),
+        handshakeApi.listHandshakes().catch(() => []),
+      ]);
+
+      // Fetch score if available
+      let icsScore = '--';
+      try {
+        const token = localStorage.getItem('auth_token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (user?.id) {
+          const scoreResponse = await apiClient.get(`/scores/${user.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (scoreResponse.data.success && scoreResponse.data.data?.ics_score) {
+            icsScore = scoreResponse.data.data.ics_score.toString();
+          }
+        }
+      } catch (e) {
+        // Score not available yet
+      }
+
+      setStats({
+        totalMaterials: materialSummary.total_materials || 0,
+        activeHandshakes: Array.isArray(handshakeList) ? handshakeList.length : 0,
+        icsScore,
+        complianceStatus: 'Good',
+      });
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const displayStats = [
+    { name: 'Total Materials', value: stats.totalMaterials.toString(), icon: Package, change: '+0%', href: '/materials' },
+    { name: 'Active Handshakes', value: stats.activeHandshakes.toString(), icon: Handshake, change: '+0%', href: '/handshakes' },
+    { name: 'ICS Score', value: stats.icsScore, icon: TrendingUp, change: 'N/A', href: '/scores' },
+    { name: 'Compliance Status', value: stats.complianceStatus, icon: Shield, change: 'On track', href: '/compliance' },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-12">
+        <div className="text-lg text-gray-500">Loading dashboard...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
