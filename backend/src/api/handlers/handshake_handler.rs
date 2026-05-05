@@ -12,6 +12,7 @@ use crate::models::{ApiResponse, DigitalHandshake};
 use crate::repositories::material_repository::MaterialRepository;
 use crate::repositories::supplier_repository::SupplierRepository;
 use crate::utils::error::{AppError, AppResult};
+use crate::utils::crypto::{verify_signature, compute_payload_hash};
 
 #[derive(Debug, Deserialize, Validate)]
 pub struct ConfirmHandshakeRequest {
@@ -21,6 +22,12 @@ pub struct ConfirmHandshakeRequest {
     pub payload_hash: String,
     pub hash_prev: String,
     pub version_vector: serde_json::Value,
+    pub supplier_public_key: String,
+    pub buyer_public_key: String,
+    pub from_party: String,
+    pub to_party: String,
+    pub timestamp: String,
+    pub data: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,6 +67,77 @@ pub async fn confirm_handshake(
         return Err(AppError::NotFound("Buyer not found".to_string()));
     }
 
+    // Verify the expected payload hash matches computed hash
+    let expected_payload_hash = compute_payload_hash(
+        &payload.material_id.to_string(),
+        &payload.from_party,
+        &payload.to_party,
+        &payload.timestamp,
+        &payload.data,
+    );
+    
+    if expected_payload_hash != payload.payload_hash {
+        return Err(AppError::BadRequest(
+            "Payload hash mismatch - potential tampering detected".to_string()
+        ));
+    }
+
+    // Verify supplier signature (Ed25519)
+    let supplier_sig_valid = verify_signature(
+        &payload.supplier_sig,
+        payload.payload_hash.as_bytes(),
+        &payload.supplier_public_key,
+    ).map_err(|e| AppError::InternalServerError(
+        format!("Signature verification error: {}", e)
+    ))?;
+    
+    if !supplier_sig_valid {
+        return Err(AppError::Unauthorized(
+            "Invalid supplier signature - handshake rejected".to_string()
+        ));
+    }
+
+    // Verify buyer signature (Ed25519)
+    let buyer_sig_valid = verify_signature(
+        &payload.buyer_sig,
+        payload.payload_hash.as_bytes(),
+        &payload.buyer_public_key,
+    ).map_err(|e| AppError::InternalServerError(
+        format!("Signature verification error: {}", e)
+    ))?;
+    
+    if !buyer_sig_valid {
+        return Err(AppError::Unauthorized(
+            "Invalid buyer signature - handshake rejected".to_string()
+        ));
+    }
+
+    // Validate hash chain integrity - check if hash_prev matches previous handshake's hash_current
+    let previous_hash_current: Option<String> = sqlx::query_scalar!(
+        "SELECT hash_current FROM digital_handshake WHERE material_id = $1 ORDER BY timestamp_utc DESC LIMIT 1",
+        payload.material_id
+    )
+    .fetch_optional(&material_repo.pool)
+    .await
+    .map_err(|e| AppError::DatabaseError(e))?;
+
+    if let Some(prev_hash) = previous_hash_current {
+        use crate::utils::crypto::validate_hash_chain;
+        if !validate_hash_chain(&payload.hash_prev, &prev_hash) {
+            return Err(AppError::BadRequest(
+                format!("Hash chain validation failed: hash_prev does not match previous handshake's hash_current for material {}", payload.material_id)
+            ));
+        }
+    } else {
+        // First handshake for this material - hash_prev should be zeros or genesis hash
+        const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+        if payload.hash_prev != GENESIS_HASH && !payload.hash_prev.is_empty() {
+            return Err(AppError::BadRequest(
+                "First handshake must have genesis hash or empty hash_prev".to_string()
+            ));
+        }
+    }
+
     let hash_current = compute_hash_current(
         &payload.payload_hash,
         &payload.hash_prev,
@@ -84,7 +162,7 @@ pub async fn confirm_handshake(
         StatusCode::CREATED,
         Json(ApiResponse::success(
             handshake,
-            "Digital handshake confirmed successfully".to_string(),
+            "Digital handshake confirmed successfully with cryptographic verification".to_string(),
         )),
     ))
 }
