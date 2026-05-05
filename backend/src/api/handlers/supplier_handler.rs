@@ -180,3 +180,66 @@ pub async fn get_supplier_summary(
         "Supplier summary retrieved successfully".to_string(),
     )))
 }
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct UpdateSupplierRequest {
+    #[validate(length(min = 3, max = 100))]
+    pub name: Option<String>,
+    #[validate(length(min = 3, max = 200))]
+    pub business_name: Option<String>,
+    #[validate(length(equal = 6, message = "Pincode must be 6 digits"))]
+    pub pincode: Option<String>,
+    #[validate(pattern(r"^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}$", message = "Invalid GST format"))]
+    pub gst_number: Option<String>,
+}
+
+pub async fn update_supplier(
+    State(repo): State<SupplierRepository>,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+    Json(payload): Json<UpdateSupplierRequest>,
+) -> AppResult<impl IntoResponse> {
+    payload.validate().map_err(|e| {
+        AppError::BadRequest(format!("Validation failed: {}", e))
+    })?;
+
+    let supplier = repo
+        .find_by_id(id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Supplier not found".to_string()))?;
+
+    repo.update_profile(
+        id,
+        payload.name.as_deref(),
+        payload.business_name.as_deref(),
+        payload.pincode.as_deref(),
+        payload.gst_number.as_deref(),
+    ).await?;
+
+    let updated = repo
+        .find_by_id(id)
+        .await?
+        .ok_or_else(|| AppError::InternalError("Failed to fetch updated supplier".to_string()))?;
+
+    Ok(Json(ApiResponse::success(
+        updated,
+        "Supplier profile updated successfully".to_string(),
+    )))
+}
+
+pub async fn get_my_profile(
+    State(repo): State<SupplierRepository>,
+    extensions: axum::extract::Extension<crate::auth::jwt::Claims>,
+) -> AppResult<impl IntoResponse> {
+    let supplier_id = extensions.0.sub.parse::<Uuid>()
+        .map_err(|_| AppError::Unauthorized("Invalid supplier ID in token".to_string()))?;
+
+    let supplier = repo
+        .find_by_id(supplier_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Supplier not found".to_string()))?;
+
+    Ok(Json(ApiResponse::success(
+        supplier,
+        "Profile retrieved successfully".to_string(),
+    )))
+}

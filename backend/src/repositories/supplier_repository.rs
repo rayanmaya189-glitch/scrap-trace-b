@@ -125,3 +125,35 @@ impl SupplierRepository {
         Ok(())
     }
 }
+
+    pub async fn update_profile(
+        &self,
+        id: Uuid,
+        name: Option<&str>,
+        business_name: Option<&str>,
+        pincode: Option<&str>,
+        gst_number: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            UPDATE supplier_profile 
+            SET 
+                name = COALESCE($1, name),
+                business_name = COALESCE($2, business_name),
+                pincode = COALESCE($3, pincode),
+                gst_number = COALESCE($4, gst_number),
+                updated_at = NOW()
+            WHERE id = $5
+            "#,
+        )
+        .bind(name)
+        .bind(business_name)
+        .bind(pincode)
+        .bind(gst_number)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+}
