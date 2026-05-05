@@ -11,6 +11,7 @@ use tracing::{info, error, warn, debug};
 
 use crate::nats::{NatsManager, BTraceEvent};
 use crate::utils::error::AppResult;
+use crate::utils::crypto::validate_hash_chain;
 
 /// Event Consumer for processing B-Trace events
 pub struct EventConsumer {
@@ -303,6 +304,29 @@ impl EventConsumer {
         event: crate::nats::HandshakeConfirmedEvent,
     ) -> AppResult<()> {
         info!("Processing HandshakeConfirmed event for handshake {}", event.handshake_id);
+
+
+        // Validate hash chain integrity - check if hash_prev matches previous handshake's hash_current
+        let previous_hash_current: Option<String> = sqlx::query_scalar!(
+            "SELECT hash_current FROM digital_handshake WHERE material_id = $1 ORDER BY timestamp_utc DESC LIMIT 1",
+            event.material_id
+        )
+        .fetch_optional(&self.db_pool)
+        .await
+        .map_err(|e| crate::utils::error::AppError::DatabaseError(e))?;
+
+        if let Some(prev_hash) = previous_hash_current {
+            // For existing materials with previous handshakes, validate the chain
+            if !validate_hash_chain(&event.hash_prev, &prev_hash) {
+                return Err(crate::utils::error::AppError::BadRequest(
+                    format!("Hash chain validation failed: hash_prev does not match previous handshake's hash_current for material {}", event.material_id)
+                ));
+            }
+            info!("Hash chain validated successfully for material {}", event.material_id);
+        } else {
+            // First handshake for this material - hash_prev should be zeros or genesis hash
+            info!("First handshake for material {}, skipping chain validation", event.material_id);
+        }
 
         // Insert the handshake record into the database
         sqlx::query!(
