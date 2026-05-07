@@ -1,71 +1,283 @@
 ```
-# Android build artifacts
-*.apk
-*.aar
-*.so
-*.dex
-*.class
-
-# Android dependency directories
-.gradle/
-build/
-app/build/
-
-# iOS build artifacts
-*.ipa
-*.app
-*.framework
-*.dylib
-
-# iOS dependency directories
-Pods/
-Carthage/
-build/
-
-# Kotlin/Java compiled files
-*.class
-*.jar
-*.war
-*.ear
-
-# Swift compiled files
-*.swiftmodule
-*.swiftdoc
-
-# Build directories (general)
+# Dependencies
 target/
-dist/
-out/
 
-# IDE files
-.idea/
-.vscode/
-
-# Log files
+# Logs and temp files
 *.log
 
-# Environment files
+# Environment
 .env
 .env.local
 *.env.*
 
-# Coverage reports
-coverage/
-htmlcov/
-*.coverage
+# Editors
+.vscode/
+.idea/
 
-# Temporary files
-*.tmp
-*.swp
-*.swo
-
-# System files
-.DS_Store
-Thumbs.db
-
-# Python artifacts (if any Python components)
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.Python
+env/
+venv/
+.venv/
+.venv.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git/modules/
+*.tmproj
+*.sublime-project
+*.sublime-workspace
+nbproject/
+*.nb-*
+*.nb.html
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# Rust
+Cargo.lock
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+node_modules/
+dist/
+build/
+.nuxt/
+.next/
+.cache/
+.vercel/
+netlify/
+public/
+*.tsbuildinfo
+*.js.map
+*.mjs.map
+*.cjs.map
+
+# Frontend
+*.min.js
+*.min.css
+bundle.js
+bundle.css
+public/build/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Testing
+coverage/
+htmlcov/
+.coveralls.yml
+*.gcov
+*.lcov
+*.profdata
+*.profraw
+
+# IDE
+.vs/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.tmproj
+*.xcworkspace
+*.xcodeproj
+nbproject/
+*.nb-*
+*.nb.html
+
+# Build outputs
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.a
+*.out
+*.bin
+*.jar
+*.war
+*.ear
+*.class
+*.pyc
+*.pyo
+*.pyd
+*.dylib
+*.dll
+*.so
+*.egg-info/
+*.egg
+
+# Compression
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+
+# Distribution / packaging
+.Python
+_build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Flask
+instance/
+.webassets-cache
+
+# Scrapy
+.scrapy
+
+# Sphinx
+docs/_build/
+
+# PyBuilder
+build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Sage
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Ruff
+.ruff_cache/
+
+# Black
+.black_cache/
+
+# Coverage
+.coverage*
 ```

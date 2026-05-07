@@ -1,3 +1,4 @@
+pub mod audit_routes;
 pub mod auth_routes;
 pub mod consent_routes;
 pub mod handshake_routes;
