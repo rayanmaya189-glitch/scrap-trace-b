@@ -11,6 +11,7 @@ import { HandshakeRoutes } from './features/handshakes/HandshakeRoutes';
 import { ScoreRoutes } from './features/scores/ScoreRoutes';
 import { ComplianceRoutes } from './features/compliance/ComplianceRoutes';
 import { ProfileRoutes } from './features/profile/ProfileRoutes';
+import { AuditTrailPage } from './features/audit/AuditTrailPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +45,7 @@ function App() {
               <Route path="handshakes/*" element={<HandshakeRoutes />} />
               <Route path="scores/*" element={<ScoreRoutes />} />
               <Route path="compliance/*" element={<ComplianceRoutes />} />
+              <Route path="audit" element={<AuditTrailPage />} />
               <Route path="profile/*" element={<ProfileRoutes />} />
             </Route>
 

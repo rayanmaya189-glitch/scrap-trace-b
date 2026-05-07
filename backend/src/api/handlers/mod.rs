@@ -1,3 +1,4 @@
+pub mod audit_handler;
 pub mod auth_handler;
 pub mod consent_handler;
 pub mod handshake_handler;

@@ -2,6 +2,7 @@ mod api;
 mod auth;
 mod config;
 mod consumers;
+mod core;
 mod db;
 mod models;
 mod nats;
@@ -25,7 +26,7 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::api::handlers::auth_handler::AuthState as AuthHandlerState;
-use crate::api::routes::{auth_routes, consent_routes, handshake_routes, material_routes, report_routes, scoring_routes, supplier_routes, upload_routes};
+use crate::api::routes::{audit_routes, auth_routes, consent_routes, handshake_routes, material_routes, report_routes, scoring_routes, supplier_routes, upload_routes};
 use crate::auth::JwtManager;
 use crate::config::AppConfig;
 use crate::consumers::EventConsumer;
@@ -123,6 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .nest("/v1/consent", consent_routes::router(pool.clone(), supplier_repo.clone()))
         .nest("/v1/reports", report_routes::router(pool.clone()))
         .nest("/v1/upload", upload_routes::router().with_state(minio_manager.clone()))
+        .nest("/v1/audit", audit_routes::router(pool.clone()))
         .route("/health", get(health_check))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
